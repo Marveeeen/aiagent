@@ -108,3 +108,4 @@ uv.lock           Locked dependency versions
 ## Learning project scope
 
 This is an educational project built while following Boot.dev, intended for experimentation and learning. The agent can overwrite files and execute Python code, so use a disposable project or keep your work under version control. Working-directory checks are not a complete sandbox for executed code.
+# aiagent
