@@ -1,12 +1,13 @@
 import argparse
-import json
+import sys
 import os
 
 from dotenv import load_dotenv
 from openai import OpenAI
 
+from config import MAX_ITERS
 from prompts import system_prompt
-from call_function import available_functions
+from call_function import available_functions, call_function
 
 
 def main() -> None:
@@ -31,10 +32,21 @@ def main() -> None:
     if args.verbose:
         print(f"User prompt: {args.user_prompt}\n")
 
-    generate_content(client, messages, args.verbose)
+    for _ in range(MAX_ITERS):
+        try:
+            final_response = generate_content(client, messages, args.verbose)
+            if final_response:
+                print("Final response:")
+                print(final_response)
+                return
+        except Exception as e:
+            print(f"Error in generate_content: {e}")
+
+    print(f"Maximum iterations ({MAX_ITERS}) reached")
+    sys.exit(1)
 
 
-def generate_content(client: OpenAI, messages: list, verbose: bool) -> None:
+def generate_content(client: OpenAI, messages: list, verbose: bool) -> str | None:
     response = client.chat.completions.create(
         model="openrouter/free",
         messages=messages,
@@ -48,16 +60,22 @@ def generate_content(client: OpenAI, messages: list, verbose: bool) -> None:
         print("Response tokens:", response.usage.completion_tokens)
 
     message = response.choices[0].message
+    messages.append(message)
     if not message.tool_calls:
-        print("Response:")
-        print(message.content)
-        return
+        return message.content
 
     for tool_call in message.tool_calls:
         if tool_call.type != "function":
             continue
-        function_args = json.loads(tool_call.function.arguments or "{}")
-        print(f"Calling function: {tool_call.function.name}({function_args})")
+        result_message = call_function(tool_call, verbose)
+        if not result_message.get("content"):
+            raise RuntimeError(f"Empty function response for {tool_call.function.name}")
+        if verbose:
+            print(f"-> {result_message['content']}")
+
+        messages.append(result_message)
+
+    return None
 
 
 if __name__ == "__main__":
